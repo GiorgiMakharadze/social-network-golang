@@ -1,7 +1,17 @@
-package api
+package main
 
-import "fmt"
+import "log"
 
 func main() {
-	fmt.Printf("Practice project start")
+	cfg := config{
+		addr: ":8080",
+	}
+
+	app := &application{
+		config: cfg,
+	}
+
+	mux := app.mount()
+
+	log.Fatal(app.run(mux))
 }
