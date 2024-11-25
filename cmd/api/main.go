@@ -4,17 +4,19 @@ import (
 	"log"
 
 	"github.com/GiorgiMakharadze/social-network-golang/internal/env"
+	"github.com/GiorgiMakharadze/social-network-golang/internal/store"
 )
 
 func main() {
 	cfg := config{
 		addr: env.GetString("ADDR", ":8080"),
 	}
+	store := store.NewStorage(nil)
 
 	app := &application{
 		config: cfg,
+		store: store,
 	}
-
 
 
 	mux := app.mount()
