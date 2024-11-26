@@ -85,3 +85,18 @@ func (s *PostStore) Delete(ctx context.Context, postID int64) error {
 
 	return nil
 }
+
+func (s *PostStore) Update(ctx context.Context, post *models.Post) error {
+	query := `
+	UPDATE posts
+	SET title = $1, content = $2
+	WHERE id = $3
+	`
+
+	_, err := s.db.ExecContext(ctx, query, post.Title, post.Content, post.ID)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
