@@ -11,6 +11,7 @@ import (
 
 var (
 	ErrNotFound          = errors.New("resource not found")
+	ErrConflict          = errors.New("duplicate key value violates unique constraint")
 	QueryTimeoutDuration = time.Second * 5
 )
 
@@ -28,12 +29,17 @@ type Storage struct {
 	Comments interface {
 		GetByPostID(context.Context, int64) ([]models.Comment, error)
 	}
+	Followers interface {
+		Follow(ctx context.Context, followedID, userID int64) error
+		Unfollow(ctx context.Context, followedID, userID int64) error
+	}
 }
 
 func NewStorage(db *sql.DB) Storage {
 	return Storage{
-		Posts:    &PostStore{db},
-		Users:    &UsersStore{db},
-		Comments: &CommentsStore{db},
+		Posts:     &PostStore{db},
+		Users:     &UsersStore{db},
+		Comments:  &CommentsStore{db},
+		Followers: &FollowerStore{db},
 	}
 }

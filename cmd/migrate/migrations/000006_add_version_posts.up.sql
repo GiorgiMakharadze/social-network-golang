@@ -1,4 +1,4 @@
-ALTER TABLE 
+ALTER TABLE
   posts
-ADD 
+ADD
   COLUMN version INT DEFAULT 0;
