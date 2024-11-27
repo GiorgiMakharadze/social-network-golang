@@ -21,6 +21,7 @@ type Storage struct {
 		Create(context.Context, *models.Post) error
 		Delete(context.Context, int64) error
 		Update(context.Context, *models.Post) error
+		GetUserFeed(context.Context, int64) ([]models.PostWithMetadata, error)
 	}
 	Users interface {
 		Create(context.Context, *models.User) error
