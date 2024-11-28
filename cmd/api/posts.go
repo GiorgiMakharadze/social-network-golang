@@ -6,7 +6,6 @@ import (
 	"net/http"
 	"strconv"
 
-	"github.com/GiorgiMakharadze/social-network-golang/internal/models"
 	"github.com/GiorgiMakharadze/social-network-golang/internal/store"
 	"github.com/go-chi/chi/v5"
 )
@@ -21,6 +20,20 @@ type CreatePostPayload struct {
 	Tags    []string `json:"tags"`
 }
 
+// CreatePost godoc
+//
+//	@Summary		Creates a post
+//	@Description	Creates a post
+//	@Tags			posts
+//	@Accept			json
+//	@Produce		json
+//	@Param			payload	body		CreatePostPayload	true	"Post payload"
+//	@Success		201		{object}	store.Post
+//	@Failure		400		{object}	error
+//	@Failure		401		{object}	error
+//	@Failure		500		{object}	error
+//	@Security		ApiKeyAuth
+//	@Router			/posts [post]
 func (app *application) createPostHandler(w http.ResponseWriter, r *http.Request) {
 	var payload CreatePostPayload
 	if err := readJSON(w, r, &payload); err != nil {
@@ -33,10 +46,13 @@ func (app *application) createPostHandler(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	post := &models.Post{
+	user := getUserFromContext(r)
+
+	post := &store.Post{
 		Title:   payload.Title,
 		Content: payload.Content,
-		UserID:  1,
+		Tags:    payload.Tags,
+		UserID:  user.ID,
 	}
 
 	ctx := r.Context()
@@ -52,6 +68,19 @@ func (app *application) createPostHandler(w http.ResponseWriter, r *http.Request
 	}
 }
 
+// GetPost godoc
+//
+//	@Summary		Fetches a post
+//	@Description	Fetches a post by ID
+//	@Tags			posts
+//	@Accept			json
+//	@Produce		json
+//	@Param			id	path		int	true	"Post ID"
+//	@Success		200	{object}	store.Post
+//	@Failure		404	{object}	error
+//	@Failure		500	{object}	error
+//	@Security		ApiKeyAuth
+//	@Router			/posts/{id} [get]
 func (app *application) getPostHandler(w http.ResponseWriter, r *http.Request) {
 	post := getPostFromCtx(r)
 
@@ -67,9 +96,21 @@ func (app *application) getPostHandler(w http.ResponseWriter, r *http.Request) {
 		app.internalServerError(w, r, err)
 		return
 	}
-
 }
 
+// DeletePost godoc
+//
+//	@Summary		Deletes a post
+//	@Description	Delete a post by ID
+//	@Tags			posts
+//	@Accept			json
+//	@Produce		json
+//	@Param			id	path		int	true	"Post ID"
+//	@Success		204	{object} string
+//	@Failure		404	{object}	error
+//	@Failure		500	{object}	error
+//	@Security		ApiKeyAuth
+//	@Router			/posts/{id} [delete]
 func (app *application) deletePostHandler(w http.ResponseWriter, r *http.Request) {
 	idParam := chi.URLParam(r, "postID")
 	id, err := strconv.ParseInt(idParam, 10, 64)
@@ -77,6 +118,7 @@ func (app *application) deletePostHandler(w http.ResponseWriter, r *http.Request
 		app.internalServerError(w, r, err)
 		return
 	}
+
 	ctx := r.Context()
 
 	if err := app.store.Posts.Delete(ctx, id); err != nil {
@@ -88,6 +130,7 @@ func (app *application) deletePostHandler(w http.ResponseWriter, r *http.Request
 		}
 		return
 	}
+
 	w.WriteHeader(http.StatusNoContent)
 }
 
@@ -96,6 +139,22 @@ type UpdatePostPayload struct {
 	Content *string `json:"content" validate:"omitempty,max=1000"`
 }
 
+// UpdatePost godoc
+//
+//	@Summary		Updates a post
+//	@Description	Updates a post by ID
+//	@Tags			posts
+//	@Accept			json
+//	@Produce		json
+//	@Param			id		path		int					true	"Post ID"
+//	@Param			payload	body		UpdatePostPayload	true	"Post payload"
+//	@Success		200		{object}	store.Post
+//	@Failure		400		{object}	error
+//	@Failure		401		{object}	error
+//	@Failure		404		{object}	error
+//	@Failure		500		{object}	error
+//	@Security		ApiKeyAuth
+//	@Router			/posts/{id} [patch]
 func (app *application) updatePostHandler(w http.ResponseWriter, r *http.Request) {
 	post := getPostFromCtx(r)
 
@@ -113,23 +172,22 @@ func (app *application) updatePostHandler(w http.ResponseWriter, r *http.Request
 	if payload.Content != nil {
 		post.Content = *payload.Content
 	}
-
 	if payload.Title != nil {
 		post.Title = *payload.Title
 	}
 
-	if err := app.store.Posts.Update(r.Context(), post); err != nil {
-		app.internalServerError(w, r, err)
-		return
-	}
+	ctx := r.Context()
 
-	if err := app.jsonResponse(w, http.StatusCreated, post); err != nil {
+	if err := app.updatePost(ctx, post); err != nil {
 		app.internalServerError(w, r, err)
 	}
 
+	if err := app.jsonResponse(w, http.StatusOK, post); err != nil {
+		app.internalServerError(w, r, err)
+	}
 }
 
-func (app *application) postContextMiddleware(next http.Handler) http.Handler {
+func (app *application) postsContextMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		idParam := chi.URLParam(r, "postID")
 		id, err := strconv.ParseInt(idParam, 10, 64)
@@ -147,7 +205,6 @@ func (app *application) postContextMiddleware(next http.Handler) http.Handler {
 				app.notFoundResponse(w, r, err)
 			default:
 				app.internalServerError(w, r, err)
-
 			}
 			return
 		}
@@ -157,7 +214,16 @@ func (app *application) postContextMiddleware(next http.Handler) http.Handler {
 	})
 }
 
-func getPostFromCtx(r *http.Request) *models.Post {
-	post, _ := r.Context().Value(postCtx).(*models.Post)
+func getPostFromCtx(r *http.Request) *store.Post {
+	post, _ := r.Context().Value(postCtx).(*store.Post)
 	return post
+}
+
+func (app *application) updatePost(ctx context.Context, post *store.Post) error {
+	if err := app.store.Posts.Update(ctx, post); err != nil {
+		return err
+	}
+
+	app.cacheStorage.Users.Delete(ctx, post.ID)
+	return nil
 }
